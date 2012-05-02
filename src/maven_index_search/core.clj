@@ -3,9 +3,12 @@
   (:import (org.apache.maven.index DefaultNexusIndexer)
            (org.apache.maven.index.creator
              JarFileContentsIndexCreator MavenPluginArtifactInfoIndexCreator MinimalArtifactInfoIndexCreator)
-           (org.apache.maven.index.updater DefaultIndexUpdater IndexUpdateRequest ResourceFetcher)))
+           (org.apache.maven.index.updater IndexUpdater IndexUpdateRequest ResourceFetcher)
+           (org.codehaus.plexus DefaultPlexusContainer)))
 
 (def ^{:dynamic true} *indexer* (DefaultNexusIndexer.))
+
+(def ^{:dynamic true} *plexus* (DefaultPlexusContainer.))
 
 (defn context [id]
   (.get (.getIndexingContexts *indexer*) id))
@@ -31,13 +34,14 @@
       (connect [id url]
         (println "connect" id url)
         (dosync (ref-set base-url url)))
-      (disconnect [])
+      (disconnect []
+        (println "disconnect" @base-url))
       (retrieve [name]
         (println "retrieve" @base-url name)
-        (client/get (str @base-url "/" name) {:as :stream})))))
+        (get (client/get (str @base-url "/" name) {:as :stream}) :body)))))
 
 (defn update-index [context-id]
-  (.fetchAndUpdateIndex (DefaultIndexUpdater.) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
+  (.fetchAndUpdateIndex (.lookup *plexus* IndexUpdater) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
 
 (defn search
   "Search the given maven index with a query string."
