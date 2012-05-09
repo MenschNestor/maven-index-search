@@ -1,14 +1,15 @@
 (ns maven-index-search.core
   (:require [clj-http.client :as client])
-  (:import (org.apache.maven.index DefaultNexusIndexer)
+  (:import (org.apache.maven.index IteratorSearchRequest MAVEN NexusIndexer)
            (org.apache.maven.index.creator
              JarFileContentsIndexCreator MavenPluginArtifactInfoIndexCreator MinimalArtifactInfoIndexCreator)
+           (org.apache.maven.index.expr UserInputSearchExpression)
            (org.apache.maven.index.updater IndexUpdater IndexUpdateRequest ResourceFetcher)
            (org.codehaus.plexus DefaultPlexusContainer)))
 
-(def ^{:dynamic true} *indexer* (DefaultNexusIndexer.))
-
 (def ^{:dynamic true} *plexus* (DefaultPlexusContainer.))
+
+(def ^{:dynamic true} *indexer* (.lookup *plexus* NexusIndexer))
 
 (defn context [id]
   (.get (.getIndexingContexts *indexer*) id))
@@ -38,12 +39,22 @@
         (println "disconnect" @base-url))
       (retrieve [name]
         (println "retrieve" @base-url name)
-        (get (client/get (str @base-url "/" name) {:as :stream}) :body)))))
+        (:body (client/get (str @base-url "/" name) {:as :stream}))))))
 
 (defn update-index [context-id]
   (.fetchAndUpdateIndex (.lookup *plexus* IndexUpdater) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
 
-(defn search
-  "Search the given maven index with a query string."
-  [index query]
-  nil)
+(defn search-repository
+  [[id url] query page]
+  (let [local-index (clojure.java.io/file "target/index" id)]
+    (add-context id url local-index)
+    (update-index id))
+  (let [search-expression (UserInputSearchExpression. query)
+        artifact-id-query (.constructQuery *indexer* MAVEN/ARTIFACT_ID search-expression)
+        context (context id)]
+    (.lock context)
+    (with-open [search-response (.searchIterator *indexer* (IteratorSearchRequest. artifact-id-query context))]
+      (doseq [artifact-info search-response]
+        (println (.groupId artifact-info) (.artifactId artifact-info) (.version artifact-info) (.description artifact-info))))
+    (.unlock context))
+  (remove-context id))
