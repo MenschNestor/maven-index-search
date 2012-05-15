@@ -45,10 +45,11 @@
   (.fetchAndUpdateIndex (.lookup *plexus* IndexUpdater) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
 
 (defn search-repository
-  [[id url] query page]
+  [[id url] query page & {:keys [update] :or {:update false}}]
   (let [local-index (clojure.java.io/file "target/index" id)]
     (add-context id url local-index)
-    (update-index id))
+    (when update
+      (update-index id)))
   (let [search-expression (UserInputSearchExpression. query)
         artifact-id-query (.constructQuery *indexer* MAVEN/ARTIFACT_ID search-expression)
         context (context id)]
