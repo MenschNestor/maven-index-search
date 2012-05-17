@@ -29,6 +29,52 @@
   (when-let [context (context id)]
     (.removeIndexingContext *indexer* context delete-files?)))
 
+(defn ^:private percent
+  [fraction total]
+  (int (/ (* fraction 100) total)))
+
+(defn ^:private report-progress
+  [bytes-read previous-total size]
+  (let [new-total (+ previous-total bytes-read)]
+    (if (pos? size)
+      (let [previous-percent (percent previous-total size)
+            new-percent (percent new-total size)]
+        (when (not= previous-percent new-percent)
+          (print (str new-percent "%\r"))))
+      (print new-total "bytes read\r"))
+    (flush)
+    new-total))
+
+(defn ^:private progress-input-stream
+  [^java.io.InputStream input-stream size]
+  (let [total-read (atom 0)]
+    (proxy [java.io.InputStream] []
+      (available []
+        (.available input-stream))
+      (close []
+        (.close input-stream))
+      (read 
+        ([]
+         (let [data (.read input-stream)]
+           (when (> data -1)
+             (reset! total-read (report-progress 1 @total-read size)))
+           data))
+        ([b]
+         (let [bytes-read (.read input-stream b)]
+           (when (pos? bytes-read)
+             (reset! total-read (report-progress bytes-read @total-read size)))
+           bytes-read))
+        ([b off len]
+         (let [bytes-read (.read input-stream b off len)]
+           (when (pos? bytes-read)
+             (reset! total-read (report-progress bytes-read @total-read size)))
+           bytes-read)))
+      (skip [n]
+        (let [bytes-skipped (.skip input-stream n)]
+          (when (pos? bytes-skipped)
+            (reset! total-read (report-progress bytes-skipped @total-read size)))
+          bytes-skipped)))))
+
 (def ^:private http-resource-fetcher
   (let [base-url (ref nil)]
     (proxy [ResourceFetcher] []
@@ -39,7 +85,8 @@
         (println "disconnect" @base-url))
       (retrieve [name]
         (println "retrieve" @base-url name)
-        (:body (client/get (str @base-url "/" name) {:as :stream}))))))
+        (let [response (client/get (str @base-url "/" name) {:as :stream})]
+          (progress-input-stream (:body response) (Integer/parseInt (get (:headers response) "content-length"))))))))
 
 (defn update-index [context-id]
   (.fetchAndUpdateIndex (.lookup *plexus* IndexUpdater) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
