@@ -102,7 +102,13 @@
         context (context id)]
     (.lock context)
     (with-open [search-response (.searchIterator *indexer* (IteratorSearchRequest. artifact-id-query context))]
-      (doseq [artifact-info search-response]
-        (println (.groupId artifact-info) (.artifactId artifact-info) (.version artifact-info) (.description artifact-info))))
+      (let [offset (* (dec page) 25)
+            total-hits (.getTotalHitsCount search-response)
+            first-result-no (inc offset)
+            last-result-no (min (* page 25) total-hits)
+            results (drop offset (take last-result-no search-response))]
+        (println (format "showing results %d-%d/%d" first-result-no last-result-no total-hits))
+        (doseq [artifact-info results]
+          (println (.groupId artifact-info) (.artifactId artifact-info) (.version artifact-info) (.description artifact-info)))))
     (.unlock context))
   (remove-context id))
