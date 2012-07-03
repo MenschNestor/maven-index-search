@@ -40,9 +40,11 @@
       (let [previous-percent (percent previous-total size)
             new-percent (percent new-total size)]
         (when (not= previous-percent new-percent)
-          (print (str new-percent "%\r"))))
-      (print new-total "bytes read\r"))
-    (flush)
+          (print (str new-percent "%\r"))
+          (flush)))
+      (do
+        (print new-total "bytes read\r")
+        (flush)))
     new-total))
 
 (defn ^:private progress-input-stream
