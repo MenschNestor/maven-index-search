@@ -85,7 +85,7 @@
         (dosync (ref-set base-url url)))
       (disconnect []
         (println "disconnect" @base-url))
-      (retrieve [name]
+      (^java.io.InputStream retrieve [name]
         (println "retrieve" @base-url name)
         (let [response (client/get (str @base-url "/" name) {:as :stream})]
           (progress-input-stream (:body response) (Integer/parseInt (get (:headers response) "content-length"))))))))
