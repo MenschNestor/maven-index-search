@@ -1,17 +1,18 @@
 (ns maven-index-search.core
   (:require [clj-http.client :as client])
-  (:import (org.apache.maven.index IteratorSearchRequest MAVEN NexusIndexer)
+  (:import (org.apache.maven.index ArtifactInfo IteratorSearchRequest MAVEN NexusIndexer)
+           (org.apache.maven.index.context IndexingContext)
            (org.apache.maven.index.creator
              JarFileContentsIndexCreator MavenPluginArtifactInfoIndexCreator MinimalArtifactInfoIndexCreator)
            (org.apache.maven.index.expr UserInputSearchExpression)
            (org.apache.maven.index.updater IndexUpdater IndexUpdateRequest ResourceFetcher)
-           (org.codehaus.plexus DefaultPlexusContainer)))
+           (org.codehaus.plexus DefaultPlexusContainer PlexusContainer)))
 
-(def ^{:dynamic true} *plexus* (DefaultPlexusContainer.))
+(def ^{:dynamic true} ^PlexusContainer *plexus* (DefaultPlexusContainer.))
 
-(def ^{:dynamic true} *indexer* (.lookup *plexus* NexusIndexer))
+(def ^{:dynamic true} ^NexusIndexer *indexer* (.lookup *plexus* NexusIndexer))
 
-(defn context [id]
+(defn context ^IndexingContext [id]
   (.get (.getIndexingContexts *indexer*) id))
 
 (def ^:private default-indexers
@@ -91,7 +92,7 @@
           (progress-input-stream (:body response) (Integer/parseInt (get (:headers response) "content-length"))))))))
 
 (defn update-index [context-id]
-  (.fetchAndUpdateIndex (.lookup *plexus* IndexUpdater) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
+  (.fetchAndUpdateIndex ^IndexUpdater (.lookup *plexus* IndexUpdater) (IndexUpdateRequest. (context context-id) http-resource-fetcher)))
 
 (defn search-repository
   [[id url] query page & {:keys [update?] :or {:update? false}}]
@@ -110,7 +111,7 @@
             last-result-no (min (* page 25) total-hits)
             results (drop offset (take last-result-no search-response))]
         (println (format "showing results %d-%d/%d" first-result-no last-result-no total-hits))
-        (doseq [artifact-info results]
+        (doseq [^ArtifactInfo artifact-info results]
           (println (.groupId artifact-info) (.artifactId artifact-info) (.version artifact-info) (.description artifact-info)))))
     (.unlock context))
   (remove-context id))
